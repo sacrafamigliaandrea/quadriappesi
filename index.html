@@ -396,20 +396,24 @@ header.topbar {
   opacity: 1;
 }
 
-.lb-stage {
+.lb-grid {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
-  padding: 60px;
+  grid-template-columns: 1fr 400px;
 }
-@media (max-width: 720px) {
-  .lb-stage { padding: 12px; }
+
+.lb-stage {
+  position: relative;
+  padding: 80px 40px 40px;
+  display: grid;
+  place-items: center;
+  min-width: 0;
 }
 
 .lb-img {
-  max-width: calc(100vw - 120px);
-  max-height: calc(100vh - 120px);
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   object-fit: contain;
@@ -417,13 +421,109 @@ header.topbar {
   user-select: none;
   transition: opacity 0.25s ease;
 }
-@media (max-width: 720px) {
-  .lb-img {
-    max-width: calc(100vw - 24px);
-    max-height: calc(100vh - 24px);
-  }
-}
 .lb-img.loading { opacity: 0; }
+
+/* Pannello info — didascalia di sala */
+.lb-info {
+  background: var(--void-soft);
+  border-left: 1px solid #2A2620;
+  padding: 80px 40px 32px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.lb-info::-webkit-scrollbar { width: 6px; }
+.lb-info::-webkit-scrollbar-track { background: transparent; }
+.lb-info::-webkit-scrollbar-thumb { background: #2A2620; border-radius: 3px; }
+
+.lb-info .num {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: var(--giallo);
+  font-weight: 600;
+  font-feature-settings: "tnum";
+  margin-bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lb-info .num::before {
+  content: '';
+  width: 24px;
+  height: 1.5px;
+  background: var(--giallo);
+}
+
+.lb-info h2 {
+  font-family: 'Instrument Serif', 'Times New Roman', serif;
+  font-size: 36px;
+  line-height: 1.05;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: -0.5px;
+  color: #fff;
+  margin-bottom: 28px;
+}
+
+.lb-info .text {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+}
+.lb-info .text em {
+  color: rgba(255, 255, 255, 0.95);
+  font-style: italic;
+}
+.lb-info .text strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.lb-info .foot {
+  margin-top: auto;
+  padding-top: 28px;
+  border-top: 1px solid #2A2620;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lb-info .foot::before {
+  content: '';
+  width: 5px; height: 5px;
+  background: var(--rosso);
+  border-radius: 50%;
+}
+
+@media (max-width: 1100px) {
+  .lb-grid { grid-template-columns: 1fr 340px; }
+  .lb-info { padding: 80px 28px 28px; }
+  .lb-info h2 { font-size: 30px; }
+}
+@media (max-width: 900px) {
+  .lb-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+  }
+  .lb-stage {
+    padding: 60px 16px 16px;
+    min-height: 0;
+  }
+  .lb-info {
+    border-left: none;
+    border-top: 1px solid #2A2620;
+    padding: 24px 24px 24px;
+    max-height: 44vh;
+  }
+  .lb-info h2 { font-size: 24px; margin-bottom: 16px; }
+  .lb-info .num { margin-bottom: 14px; }
+  .lb-info .text { font-size: 14px; line-height: 1.65; }
+}
 
 .lb-topbar {
   position: absolute;
@@ -645,16 +745,24 @@ footer.site .firma::before {
     </button>
   </div>
 
-  <div class="lb-stage">
-    <img class="lb-img" id="lb-img" alt="">
-  </div>
+  <div class="lb-grid">
+    <div class="lb-stage">
+      <img class="lb-img" id="lb-img" alt="">
+      <button class="lb-btn lb-prev" id="lb-prev" aria-label="Opera precedente">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      </button>
+      <button class="lb-btn lb-next" id="lb-next" aria-label="Opera successiva">
+        <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+      </button>
+    </div>
 
-  <button class="lb-btn lb-prev" id="lb-prev" aria-label="Opera precedente">
-    <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
-  </button>
-  <button class="lb-btn lb-next" id="lb-next" aria-label="Opera successiva">
-    <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
-  </button>
+    <aside class="lb-info">
+      <div class="num" id="lb-info-num">N° 01 di 20</div>
+      <h2 id="lb-title">—</h2>
+      <div class="text" id="lb-text"></div>
+      <div class="foot">Galleria d'arte · Scuola Sacra Famiglia</div>
+    </aside>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -683,29 +791,114 @@ footer.site .firma::before {
      ============================================================ -->
 <script>
 /* ============================================================
-   ELENCO OPERE
+   ELENCO OPERE CON DIDASCALIE CRITICHE
+   ============================================================
+   Ogni opera ha:
+   - file: percorso dell'immagine
+   - titolo: nome dell'opera (mostrato in lightbox e come alt)
+   - descrizione: didascalia di sala (HTML inline ammesso: <em>, <strong>)
 ============================================================ */
 const OPERE = [
-  "gallery/IMG_4455.jpg",
-  "gallery/IMG_4456.jpg",
-  "gallery/IMG_4457.jpg",
-  "gallery/IMG_4458.jpg",
-  "gallery/IMG_4459.jpg",
-  "gallery/IMG_4460.jpg",
-  "gallery/IMG_4461.jpg",
-  "gallery/IMG_4462.jpg",
-  "gallery/IMG_4463.jpg",
-  "gallery/IMG_4464.jpg",
-  "gallery/IMG_4465.jpg",
-  "gallery/IMG_4466.jpg",
-  "gallery/IMG_4467.jpg",
-  "gallery/IMG_4468.jpg",
-  "gallery/IMG_4469.jpg",
-  "gallery/IMG_4470.jpg",
-  "gallery/IMG_4471.jpg",
-  "gallery/IMG_4472.jpg",
-  "gallery/IMG_4473.jpg",
-  "gallery/IMG_4474.jpg"
+  {
+    file: "gallery/IMG_4455.jpg",
+    titolo: "Omaggio al Cubismo",
+    descrizione: `Reinterpretazione di <em>Ragazza allo specchio</em> (Picasso, 1932), opera in cui il maestro spagnolo intreccia ritratto e simulacro, identità diurna e notturna. L'interpretazione coglie l'eredità delle vetrate medievali nel ductus picassiano: i contorni neri marcati non sono semplici bordi, ma piombature che reggono campiture di colore puro. La scomposizione geometrica del volto, elemento chiave del Cubismo analitico, è resa con un'audacia cromatica che trasforma l'esercizio di copia in rilettura personale.`
+  },
+  {
+    file: "gallery/IMG_4456.jpg",
+    titolo: "Astrazione surreale",
+    descrizione: `Omaggio al linguaggio biomorfico di Joan Miró — quest'opera è stata scelta come banner della galleria. Le linee nere sinuose, le stelle stilizzate e la macchia blu centrale (eco della celebre serie <em>Bleu</em> del 1961) non sono decorazioni ma alfabeto privato dell'artista, eredità del Surrealismo automatico. Il giallo saturo evoca le terre catalane di Mont-roig, paesaggio dell'infanzia di Miró. La forza compositiva sta nel dosaggio del vuoto: lo sfondo non è spazio inutilizzato, ma silenzio che lascia respirare ogni segno.`
+  },
+  {
+    file: "gallery/IMG_4457.jpg",
+    titolo: "Dinamismo geometrico",
+    descrizione: `Sintesi tra Astrattismo geometrico (Mondrian, Malevič) e Cubismo sintetico, fase post-1912 di Picasso e Braque. Il valore dell'opera sta nella tensione consapevole tra linee rigide e curve nere: una scelta non casuale, che recupera la dialettica suprematista tra ortogonale statica e dinamismo organico. I colori primari, accostati per contrasto puro, restituiscono al colore la sua funzione strutturale, non decorativa — esattamente come voleva la lezione di Mondrian.`
+  },
+  {
+    file: "gallery/IMG_4458.jpg",
+    titolo: "Natura morta silenziosa",
+    descrizione: `Riferimento alla pittura metafisica di Giorgio Morandi (1890-1964), maestro bolognese che ha fatto della natura morta un esercizio di meditazione. La maturità di questo lavoro si rivela nella scelta del silenzio: ridurre il mondo a poche bottiglie, sottrarre ogni virtuosismo, accettare i colori terrosi è una decisione contraria all'istinto giovanile. I rapporti tonali tra ombre e campiture di sabbia restituiscono quella <em>gravitas</em> che in Morandi diventa quasi musicale.`
+  },
+  {
+    file: "gallery/IMG_4459.jpg",
+    titolo: "La danza e la musica",
+    descrizione: `Omaggio agli ultimi <em>gouaches découpés</em> di Henri Matisse (1869-1954), realizzati nei primi anni Cinquanta quando il maestro, ormai costretto su una sedia a rotelle, ridusse la pittura al gesto puro: ritagliare il colore con le forbici. L'opera onora questa lezione tarda — il colore svincolato dal reale, la forma come danza — e dimostra una comprensione matura del Fauvismo: non si dipinge ciò che si vede, ma ciò che si sente.`
+  },
+  {
+    file: "gallery/IMG_4460.jpg",
+    titolo: "Composizione multimediale",
+    descrizione: `Tra Dadaismo (Hannah Höch, Kurt Schwitters) e Pop Art (Richard Hamilton, Andy Warhol). Il collage non è qui un esercizio tecnico ma un'operazione concettuale: prelevando frammenti di capolavori storici — Vermeer, scultura classica — e accostandoli a testi e tessuti contemporanei, l'opera mette in dialogo epoche diverse e si interroga sul significato stesso di "arte". È metalinguaggio: arte che parla d'arte. Una scelta di pensiero, prima ancora che di mano.`
+  },
+  {
+    file: "gallery/IMG_4461.jpg",
+    titolo: "Ritratto in monocromo",
+    descrizione: `Tecnica della <em>grisaille</em>, antica almeno quanto Mantegna e Rubens, scelta da Picasso per <em>Guernica</em> in virtù della sua forza drammatica. Lavorare in grisaille è più difficile che lavorare a colori: senza il sostegno della cromia, il volume regge solo sui valori tonali. Il chiaroscuro deve essere giusto al primo passaggio, perché non c'è correzione possibile. La tridimensionalità scultorea ottenuta qui rivela uno studio attento del chiaroscuro classico, quello dei disegni preparatori del Rinascimento.`
+  },
+  {
+    file: "gallery/IMG_4462.jpg",
+    titolo: "Stratificazione materica",
+    descrizione: `Linguaggio dell'Arte Informale italiana — Alberto Burri con i suoi <em>Sacchi</em> e <em>Combustioni</em>, Antoni Tàpies con la sua materia povera. La sfida è coraggiosa: rinunciare alla figura, al colore decorativo, al disegno come confine, e affidare tutto alla tattilità. Frammenti di carta, tessuti e strati pittorici sovrapposti chiedono allo spettatore non di guardare, ma di immaginare di toccare. Un'opera da osservare con gli occhi di chi sa che l'arte non si limita al campo visivo.`
+  },
+  {
+    file: "gallery/IMG_4463.jpg",
+    titolo: "Il campo di grano · variazione materica",
+    descrizione: `Riferimento alle ultime opere di Vincent van Gogh ad Auvers-sur-Oise (1890), nei mesi che precedono la morte. La tecnica a impasto — colore denso applicato con la spatola o il pennello carico — non è qui un effetto decorativo, ma una scelta espressiva precisa: la pennellata corta e nervosa restituisce il ritmo emotivo dell'artista, il suo affanno. La materia diventa documento dello stato d'animo, non solo rappresentazione del paesaggio.`
+  },
+  {
+    file: "gallery/IMG_4464.jpg",
+    titolo: "Il campo di grano · variazione espressionista",
+    descrizione: `Stesso soggetto vangoghiano, declinato attraverso la lezione tedesca dell'Espressionismo (Munch, Kirchner, il gruppo <em>Die Brücke</em>). L'alternanza tra pennellate sfumate e tratti secchi non è incertezza tecnica, ma scelta drammatica: il dialogo violento tra i caldi della terra e il cielo tempestoso costruisce la tensione emotiva dell'opera. Un esercizio prezioso: confrontarsi con Van Gogh attraverso il filtro di chi a sua volta lo ha amato e reinventato.`
+  },
+  {
+    file: "gallery/IMG_4465.jpg",
+    titolo: "Il campo di grano con volo di corvi",
+    descrizione: `Riferimento al celebre dipinto di Van Gogh del luglio 1890, conservato al Van Gogh Museum di Amsterdam. L'opera originale, una delle ultime del maestro, è densa di simbologia: i tre sentieri che si biforcano sono lettura quasi unanime della scelta esistenziale. Questa versione ne esalta il dinamismo della pennellata: il giallo saturo del grano e il blu profondo del cielo non si limitano a contrapporsi, ma costruiscono una texture tattile che invita lo sguardo a percepire il rilievo, non solo il colore.`
+  },
+  {
+    file: "gallery/IMG_4466.jpg",
+    titolo: "Il campo di grano · variazione dei sentieri",
+    descrizione: `Reinterpretazione che mette al centro il tema dei sentieri, presenza ricorrente nell'iconografia vangoghiana. La forza compositiva sta nella consapevolezza dell'asse prospettico: i sentieri marroni e verdi, tagliando il campo giallo, non sono semplici elementi decorativi ma guide visive — costringono l'occhio a viaggiare verso l'orizzonte. Un dettaglio non scontato: rendere narrativa una composizione paesaggistica richiede comprensione della percezione, non solo della tecnica.`
+  },
+  {
+    file: "gallery/IMG_4467.jpg",
+    titolo: "Notte stellata",
+    descrizione: `Omaggio a <em>La Notte stellata</em> di Van Gogh (giugno 1889, MoMA New York), dipinta durante il ricovero al manicomio di Saint-Rémy. Il cipresso scuro in primo piano è un elemento iconograficamente potentissimo: nella tradizione mediterranea albero della morte, in Van Gogh diventa tramite verticale tra terra e cielo. La scelta di una tecnica mista — acquerello, pastelli, matite — è interessante: laddove l'originale è costruito su impasto denso, qui il segno si fa più trasparente, più meditativo. È una scelta interpretativa, non un'imitazione.`
+  },
+  {
+    file: "gallery/IMG_4468.jpg",
+    titolo: "Il campo di grano · variazione lineare",
+    descrizione: `Una declinazione che si discosta dalla matericità delle altre versioni: qui il segno è netto, ritmico, quasi grafico. Una scelta coraggiosa, che accosta Van Gogh alla lezione del Divisionismo italiano (Pellizza da Volpedo, Segantini), dove il colore puro è applicato in tratti separati e regolari. Le linee non si limitano a descrivere il vento: lo costruiscono. E nel costruirlo guidano l'occhio dello spettatore verso il centro della composizione.`
+  },
+  {
+    file: "gallery/IMG_4469.jpg",
+    titolo: "Il campo di grano · variazione luminosa",
+    descrizione: `Tra le interpretazioni del soggetto vangoghiano, questa è la più rarefatta: tecnica acquosa, stesure morbide, luce filtrata. Una scelta interessante, che rilegge Van Gogh con il sentire dell'Impressionismo francese — Monet, Pissarro — restituendo all'aria il suo ruolo protagonista. I corvi e le nubi scure mantengono la tensione narrativa, ma immerse in una luce che dissolve la matericità: l'opera dimostra come lo stesso soggetto possa essere riletto ogni volta in modo diverso, senza tradirlo.`
+  },
+  {
+    file: "gallery/IMG_4470.jpg",
+    titolo: "Il campo di grano · variazione puntinista",
+    descrizione: `La tecnica picchiettata — colore applicato in piccoli tocchi ravvicinati — richiama esplicitamente la lezione del Puntinismo di Georges Seurat (<em>Una domenica pomeriggio all'isola della Grande Jatte</em>, 1886). Una scelta tecnicamente impegnativa: il puntinismo non concede correzioni e impone un ritmo costante. Il risultato — piatto e vibrante insieme — dimostra come la stessa scena possa essere completamente trasfigurata cambiando solo la modalità del segno.`
+  },
+  {
+    file: "gallery/IMG_4471.jpg",
+    titolo: "Notte stellata · variazione vorticosa",
+    descrizione: `Seconda interpretazione del capolavoro vangoghiano, qui letta nella sua dimensione cinetica. Le pennellate lunghe, curve, non miscelate sono fedeli all'originale: Van Gogh costruisce il cielo notturno come una galassia in rotazione — una visione che curiosamente anticipa di decenni le scoperte astronomiche sulle spirali galattiche. La forma slanciata del cipresso, allungata oltre il vero, agisce da contrappunto verticale al moto rotatorio del cielo: una tensione formale che dà all'opera tutta la sua carica espressiva.`
+  },
+  {
+    file: "gallery/IMG_4472.jpg",
+    titolo: "Il campo di grano · variazione sfumata",
+    descrizione: `A differenza delle versioni più ritmiche o materiche, qui prevale il passaggio tonale: i colori sfumano l'uno nell'altro, creando una temperatura cromatica omogenea nel cielo e nelle distese dorate. Una scelta sottile: i corvi e i sentieri, mantenuti con contorni più definiti, diventano fulcri narrativi in un'atmosfera altrimenti meditativa. L'opera dimostra una comprensione raffinata di come l'occhio costruisca la gerarchia visiva attraverso il contrasto di nitidezza.`
+  },
+  {
+    file: "gallery/IMG_4473.jpg",
+    titolo: "Il campo di grano · variazione drammatica",
+    descrizione: `L'interpretazione più espressionista del ciclo: un contrasto quasi violento tra il blu scuro striato del cielo e il giallo saturo del grano. Le pennellate rapide, nervose e direzionali sono fedeli al principio espressivo di Van Gogh: il segno come traccia visibile dell'emozione dell'artista. L'opera non cerca quiete, trasmette l'inquietudine della scena, facendo eco alla biografia stessa del pittore nei suoi mesi finali. Una lettura coraggiosa, che non addomestica il soggetto.`
+  },
+  {
+    file: "gallery/IMG_4474.jpg",
+    titolo: "Paesaggio di campagna",
+    descrizione: `Riferimento ai paesaggi provenzali di Paul Cézanne — la <em>Montagne Sainte-Victoire</em>, dipinta decine di volte tra il 1885 e il 1906 — e al loro principio rivoluzionario: costruire il volume con il colore, non con il disegno. Qui le nuvole, le montagne azzurre in lontananza e la vegetazione non hanno contorni definiti: sono massa di pennellate dense e direzionali. Un'intuizione che, a fine Ottocento, aprirà la strada al Cubismo. Anche se l'opera può apparire "classica", incarna una rivoluzione percettiva fondamentale per tutta l'arte del Novecento.`
+  }
 ];
 
 /* ============================================================
@@ -738,9 +931,9 @@ const ZOOM_SVG = `
    RENDER GALLERY
 ============================================================ */
 function renderGallery() {
-  galleryEl.innerHTML = OPERE.map((src, i) => `
+  galleryEl.innerHTML = OPERE.map((opera, i) => `
     <article class="work" data-idx="${i}" style="--i:${i}">
-      <img src="${src}" alt="Opera ${fmtN(i+1)}" loading="lazy">
+      <img src="${opera.file}" alt="${opera.titolo}" loading="lazy">
       <span class="num">N${'\u00B0'} ${fmtN(i+1)}</span>
       <span class="zoom-icon">${ZOOM_SVG}</span>
     </article>
@@ -770,12 +963,22 @@ function closeLightbox() {
 }
 
 function updateLightbox() {
-  const src = OPERE[lbIdx];
+  const opera = OPERE[lbIdx];
   lbImg.classList.add('loading');
   lbImg.onload = () => lbImg.classList.remove('loading');
-  lbImg.src = src;
-  lbImg.alt = `Opera ${fmtN(lbIdx+1)}`;
+  lbImg.src = opera.file;
+  lbImg.alt = opera.titolo;
   lbCurrent.textContent = fmtN(lbIdx + 1);
+
+  // Aggiorna pannello info (didascalia di sala)
+  document.getElementById('lb-info-num').textContent = `N° ${fmtN(lbIdx + 1)} di ${fmtN(TOT)}`;
+  document.getElementById('lb-title').textContent = opera.titolo;
+  document.getElementById('lb-text').innerHTML = opera.descrizione;
+
+  // Resetta lo scroll del pannello quando cambio opera
+  const infoEl = document.querySelector('.lb-info');
+  if (infoEl) infoEl.scrollTop = 0;
+
   preloadAdjacent(lbIdx);
 }
 
@@ -816,7 +1019,7 @@ function preloadAdjacent(idx) {
   [-1, 1].forEach(d => {
     const i = (idx + d + TOT) % TOT;
     const img = new Image();
-    img.src = OPERE[i];
+    img.src = OPERE[i].file;
   });
 }
 
