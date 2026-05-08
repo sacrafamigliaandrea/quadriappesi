@@ -408,11 +408,20 @@ header.topbar {
 }
 
 .lb-img {
-  max-width: 100%;
-  max-height: 100%;
+  max-width: calc(100vw - 120px);
+  max-height: calc(100vh - 120px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
   box-shadow: 0 30px 100px rgba(0, 0, 0, 0.7);
   user-select: none;
   transition: opacity 0.25s ease;
+}
+@media (max-width: 720px) {
+  .lb-img {
+    max-width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
 }
 .lb-img.loading { opacity: 0; }
 
