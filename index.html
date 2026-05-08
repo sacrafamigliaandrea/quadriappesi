@@ -413,7 +413,7 @@ header.topbar {
 
 .lb-img {
   max-width: 100%;
-  max-height: 100%;
+  max-height: calc(100vh - 120px);
   width: auto;
   height: auto;
   object-fit: contain;
@@ -513,6 +513,9 @@ header.topbar {
   .lb-stage {
     padding: 60px 16px 16px;
     min-height: 0;
+  }
+  .lb-img {
+    max-height: calc(56vh - 80px);
   }
   .lb-info {
     border-left: none;
