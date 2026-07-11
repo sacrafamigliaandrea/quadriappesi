@@ -830,8 +830,8 @@ footer.site .firma::before {
     <div class="lb-stage">
       <img class="lb-img" id="lb-img" alt="">
       <div class="materia-holder" id="materia-holder" aria-hidden="true"></div>
-      <div class="materia-badge" id="materia-badge" hidden>materia · luce interattiva</div>
-      <div class="materia-hint" id="materia-hint" hidden>muovi il mouse per illuminare</div>
+      <div class="materia-badge" id="materia-badge" hidden>3D · profondità reale</div>
+      <div class="materia-hint" id="materia-hint" hidden>muovi per guardarti attorno · scroll per entrare</div>
       <button class="lb-btn lb-prev" id="lb-prev" aria-label="Opera precedente">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
@@ -852,7 +852,7 @@ footer.site .firma::before {
             <path d="M3 16.5 12 21l9-4.5"></path>
           </svg>
         </span>
-        <span class="mt-label" id="materia-toggle-label">Esplora la materia</span>
+        <span class="mt-label" id="materia-toggle-label">Entra nel quadro</span>
       </button>
       <div class="foot">Galleria d'arte · Scuola Sacra Famiglia</div>
     </aside>
@@ -1172,7 +1172,7 @@ renderGallery();
       if (on){
         Materia.exit();
         toggle.setAttribute('aria-pressed', 'false');
-        label.textContent = 'Esplora la materia';
+        label.textContent = 'Entra nel quadro';
         document.getElementById('materia-badge').hidden = true;
       } else {
         label.textContent = 'Caricamento…';
@@ -1206,7 +1206,7 @@ renderGallery();
           console.error(err);
           Materia.exit();   // smonta l'eventuale renderer orfano del tentativo fallito
           toggle.setAttribute('aria-pressed', 'false');
-          label.textContent = 'Esplora la materia';
+          label.textContent = 'Entra nel quadro';
           document.getElementById('materia-badge').hidden = true;
         }
       }
@@ -1226,16 +1226,22 @@ renderGallery();
 ============================================================ */
 const Materia = (function(){
   const THREE_URL = 'https://unpkg.com/three@0.128.0/build/three.min.js';
+  const SEG = 200;                       // tessellazione del piano (per lo spostamento)
+  const R0 = 3, RMIN = 1.7, RMAX = 3.4;  // raggio camera base / min / max (dolly)
+  const MAX_AZ = 0.38, MAX_POL = 0.24;   // ampiezza parallasse in rad
+  const DISPLACE_FRAC = 0.30;            // profondità come frazione dell'altezza del piano
+  const IDLE_MS = 2600;
   let loadPromise = null;
-  let renderer, scene, camera, mesh, geo, mat, tex;
+  let renderer, scene, camera, mesh, geo, mat, tex, depthTex;
   let holder, raf = null;
   let active = false;
   let aspect = 1;
-  let target = { lx: 0, ly: 0, px: 0, py: 0 };   // target da input
-  let cur    = { lx: 0, ly: 0, px: 0, py: 0 };   // valori smorzati
+  let uDisplace = 0.5, lookZ = 0.2;
+  let target = { az: 0, pol: 0, r: R0 };   // target da input (orbita/dolly)
+  let cur    = { az: 0, pol: 0, r: R0 };   // valori smorzati
+  let pinchStart = null;
   let lastInput = 0;
   let swapToken = 0;
-  const IDLE_MS = 2500;
   const reduceMotion = window.matchMedia &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -1265,55 +1271,55 @@ const Materia = (function(){
     });
   }
 
-  function buildMaterial(texture){
+  // gallery/IMG_x.jpg  ->  gallery/depth/IMG_x.png
+  function depthPath(file){
+    return file.replace(/^gallery\//, 'gallery/depth/').replace(/\.jpe?g$/i, '.png');
+  }
+
+  function buildMaterial(albedo, depth){
     return new THREE.ShaderMaterial({
       uniforms: {
-        map:        { value: texture },
-        uResolution:{ value: new THREE.Vector2(texture.image.width, texture.image.height) },
-        uLightDir:  { value: new THREE.Vector3(0.0, 0.0, 0.35) },
-        uBumpScale: { value: 14.0 },
-        uSpecular:  { value: 0.35 },
-        uShininess: { value: 24.0 },
-        uAmbient:   { value: 0.55 }
+        map:        { value: albedo },
+        depthMap:   { value: depth },
+        uResolution:{ value: new THREE.Vector2(depth.image.width, depth.image.height) },
+        uDisplace:  { value: uDisplace },
+        uLightDir:  { value: new THREE.Vector3(0.35, 0.5, 0.85) },
+        uAmbient:   { value: 0.82 },
+        uNormalStr: { value: 6.0 }
       },
       vertexShader: `
+        uniform sampler2D depthMap;
+        uniform float uDisplace;
         varying vec2 vUv;
         void main(){
           vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          float d = texture2D(depthMap, uv).r;     // chiaro = vicino
+          vec3 p = position;
+          p.z += d * uDisplace;                    // spinge i piani vicini verso la camera
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
       fragmentShader: `
         precision highp float;
         uniform sampler2D map;
+        uniform sampler2D depthMap;
         uniform vec2 uResolution;
         uniform vec3 uLightDir;
-        uniform float uBumpScale;
-        uniform float uSpecular;
-        uniform float uShininess;
         uniform float uAmbient;
+        uniform float uNormalStr;
         varying vec2 vUv;
 
-        float lum(vec2 uv){
-          vec3 c = texture2D(map, uv).rgb;
-          return dot(c, vec3(0.299, 0.587, 0.114));
-        }
+        float dep(vec2 uv){ return texture2D(depthMap, uv).r; }
 
         void main(){
           vec2 texel = 1.0 / uResolution;
           vec3 albedo = texture2D(map, vUv).rgb;
-          float lx1 = lum(vUv - vec2(texel.x, 0.0));
-          float lx2 = lum(vUv + vec2(texel.x, 0.0));
-          float ly1 = lum(vUv - vec2(0.0, texel.y));
-          float ly2 = lum(vUv + vec2(0.0, texel.y));
-          vec3 n = normalize(vec3((lx1 - lx2) * uBumpScale,
-                                  (ly1 - ly2) * uBumpScale, 1.0));
-          vec3 L = normalize(uLightDir);
-          vec3 V = vec3(0.0, 0.0, 1.0);
-          vec3 H = normalize(L + V);
-          float diff = max(dot(n, L), 0.0);
-          float spec = pow(max(dot(n, H), 0.0), uShininess) * uSpecular;
-          vec3 color = albedo * (uAmbient + diff) + vec3(spec);
+          // normale della forma ricavata dal gradiente di profondità (ombreggiatura tenue)
+          float dx = dep(vUv + vec2(texel.x, 0.0)) - dep(vUv - vec2(texel.x, 0.0));
+          float dy = dep(vUv + vec2(0.0, texel.y)) - dep(vUv - vec2(0.0, texel.y));
+          vec3 n = normalize(vec3(-dx * uNormalStr, -dy * uNormalStr, 1.0));
+          float diff = max(dot(n, normalize(uLightDir)), 0.0);
+          vec3 color = albedo * (uAmbient + (1.0 - uAmbient) * diff);
           gl_FragColor = vec4(color, 1.0);
         }
       `
@@ -1327,22 +1333,33 @@ const Materia = (function(){
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    const dist = camera.position.z;
-    const vH = 2 * Math.tan((camera.fov * Math.PI/180)/2) * dist;
+    const vH = 2 * Math.tan((camera.fov * Math.PI/180)/2) * R0;
     const vW = vH * camera.aspect;
-    const margin = 0.9;
+    const margin = 0.92;
     let sx, sy;
     if (aspect > vW/vH) { sx = vW * margin; sy = sx / aspect; }
     else                { sy = vH * margin; sx = sy * aspect; }
     if (mesh) mesh.scale.set(sx, sy, 1);
+    uDisplace = DISPLACE_FRAC * sy;
+    lookZ = uDisplace * 0.45;
+    if (mat && mat.uniforms) mat.uniforms.uDisplace.value = uDisplace;
   }
 
+  // Parallasse: la posizione del puntatore mappa l'angolo di osservazione.
   function onPointer(e){
     const r = renderer.domElement.getBoundingClientRect();
     const x = ((e.clientX - r.left) / r.width) * 2 - 1;   // [-1,1]
     const y = -(((e.clientY - r.top) / r.height) * 2 - 1);
-    target.lx = x; target.ly = y;
-    target.px = x; target.py = y;
+    const amp = reduceMotion ? 0.35 : 1.0;
+    target.az  = x * MAX_AZ * amp;
+    target.pol = y * MAX_POL * amp;
+    lastInput = performance.now();
+  }
+
+  // Scroll/trackpad: dolly dentro/fuori dalla scena.
+  function onWheel(e){
+    e.preventDefault();
+    target.r = Math.max(RMIN, Math.min(RMAX, target.r + e.deltaY * 0.0016));
     lastInput = performance.now();
   }
 
@@ -1350,29 +1367,27 @@ const Materia = (function(){
     raf = requestAnimationFrame(render);
     const now = performance.now();
 
-    // Idle: se nessun input recente, la luce orbita lentamente (se motion consentito).
+    // Idle: senza input, la camera ondeggia lentamente (se motion consentito).
     if (!reduceMotion && now - lastInput > IDLE_MS){
-      const t = now * 0.0004;
-      target.lx = Math.cos(t) * 0.8;
-      target.ly = Math.sin(t) * 0.8;
-      target.px = target.lx * 0.4;
-      target.py = target.ly * 0.4;
+      const t = now * 0.00022;
+      target.az  = Math.sin(t) * MAX_AZ * 0.55;
+      target.pol = Math.sin(t * 0.66) * MAX_POL * 0.40;
     }
 
     // Smorzamento esponenziale.
-    const k = 0.08;
-    cur.lx += (target.lx - cur.lx) * k;
-    cur.ly += (target.ly - cur.ly) * k;
-    cur.px += (target.px - cur.px) * k;
-    cur.py += (target.py - cur.py) * k;
+    const k = 0.07;
+    cur.az  += (target.az  - cur.az)  * k;
+    cur.pol += (target.pol - cur.pol) * k;
+    cur.r   += (target.r   - cur.r)   * k;
 
-    if (mat && mat.uniforms) mat.uniforms.uLightDir.value.set(cur.lx, cur.ly, 0.35);
-
-    // Parallasse camera (ammorbidita se reduced-motion).
-    const amp = reduceMotion ? 0.03 : 0.12;
-    camera.position.x = cur.px * amp;
-    camera.position.y = cur.py * amp;
-    camera.lookAt(0, 0, 0);
+    // Camera in orbita sferica attorno al centro della scena.
+    const R = cur.r, ca = Math.cos(cur.pol);
+    camera.position.set(
+      R * Math.sin(cur.az) * ca,
+      R * Math.sin(cur.pol),
+      R * Math.cos(cur.az) * ca
+    );
+    camera.lookAt(0, 0, lookZ);
 
     renderer.render(scene, camera);
   }
@@ -1385,18 +1400,23 @@ const Materia = (function(){
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
-      camera.position.z = 3;
-      geo = new THREE.PlaneGeometry(1, 1, 1, 1);
+      camera.position.set(0, 0, R0);
+      geo = new THREE.PlaneGeometry(1, 1, SEG, SEG);
       holder.appendChild(renderer.domElement);
     }
-    tex = await loadTexture(file);
-    aspect = (tex.image.width || 1) / (tex.image.height || 1);
-    mat = buildMaterial(tex);
+    const [albedo, depth] = await Promise.all([loadTexture(file), loadTexture(depthPath(file))]);
+    // Se si è usciti durante il caricamento, non montare nulla.
+    if (!renderer){ albedo.dispose(); depth.dispose(); return; }
+    tex = albedo; depthTex = depth;
+    aspect = (albedo.image.width || 1) / (albedo.image.height || 1);
+    mat = buildMaterial(albedo, depth);
     mesh = new THREE.Mesh(geo, mat);
     scene.add(mesh);
     holder.classList.add('active');
     renderer.domElement.addEventListener('pointermove', onPointer);
     renderer.domElement.addEventListener('touchmove', onTouch, { passive: true });
+    renderer.domElement.addEventListener('wheel', onWheel, { passive: false });
+    target.r = cur.r = R0; target.az = cur.az = 0; target.pol = cur.pol = 0;
     lastInput = performance.now();
     active = true;
     layout();
@@ -1407,16 +1427,19 @@ const Materia = (function(){
   function exit(){
     active = false;
     swapToken++;   // invalida qualsiasi swap in volo
+    pinchStart = null;
     window.removeEventListener('resize', layout);
     window.removeEventListener('deviceorientation', onOrient);
     if (raf){ cancelAnimationFrame(raf); raf = null; }
     if (mesh){ scene.remove(mesh); mesh = null; }
     if (mat){ mat.dispose(); mat = null; }
     if (tex){ tex.dispose(); tex = null; }
+    if (depthTex){ depthTex.dispose(); depthTex = null; }
     if (holder){ holder.classList.remove('active'); }
     if (renderer){
       renderer.domElement.removeEventListener('pointermove', onPointer);
       renderer.domElement.removeEventListener('touchmove', onTouch);
+      renderer.domElement.removeEventListener('wheel', onWheel);
       if (geo) geo.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
@@ -1428,14 +1451,26 @@ const Materia = (function(){
 
   function onOrient(e){
     if (e.gamma == null || e.beta == null) return;
-    const x = Math.max(-1, Math.min(1, e.gamma / 45));   // sinistra/destra
-    const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45)); // inclinazione
-    target.lx = x; target.ly = y; target.px = x; target.py = y;
+    const x = Math.max(-1, Math.min(1, e.gamma / 35));       // sinistra/destra
+    const y = Math.max(-1, Math.min(1, (e.beta - 45) / 35)); // inclinazione
+    target.az  = x * MAX_AZ;
+    target.pol = y * MAX_POL;
     lastInput = performance.now();
   }
   function onTouch(e){
-    if (!e.touches || !e.touches[0]) return;
-    onPointer(e.touches[0]);
+    if (e.touches && e.touches.length === 2){
+      // pinch → dolly
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (pinchStart != null)
+        target.r = Math.max(RMIN, Math.min(RMAX, target.r - (dist - pinchStart) * 0.006));
+      pinchStart = dist;
+      lastInput = performance.now();
+    } else if (e.touches && e.touches[0]){
+      pinchStart = null;
+      onPointer(e.touches[0]);   // un dito → parallasse
+    }
   }
   function enableTilt(){
     window.addEventListener('deviceorientation', onOrient);
@@ -1444,15 +1479,17 @@ const Materia = (function(){
   async function swap(file){
     if (!active || !renderer) return;
     const token = ++swapToken;
-    const nt = await loadTexture(file);
+    const [albedo, depth] = await Promise.all([loadTexture(file), loadTexture(depthPath(file))]);
     // Se nel frattempo si è usciti o è partito un altro swap, abortisci.
-    if (token !== swapToken || !active || !renderer || !mat){ nt.dispose(); return; }
-    aspect = (nt.image.width || 1) / (nt.image.height || 1);
-    const old = tex;
-    tex = nt;
-    mat.uniforms.map.value = nt;
-    mat.uniforms.uResolution.value.set(nt.image.width, nt.image.height);
-    if (old) old.dispose();
+    if (token !== swapToken || !active || !renderer || !mat){ albedo.dispose(); depth.dispose(); return; }
+    aspect = (albedo.image.width || 1) / (albedo.image.height || 1);
+    const oldA = tex, oldD = depthTex;
+    tex = albedo; depthTex = depth;
+    mat.uniforms.map.value = albedo;
+    mat.uniforms.depthMap.value = depth;
+    mat.uniforms.uResolution.value.set(depth.image.width, depth.image.height);
+    if (oldA) oldA.dispose();
+    if (oldD) oldD.dispose();
     layout();
   }
 

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="it">
+<head><meta charset="UTF-8"><title>Depth Gen</title></head>
+<body style="font-family:monospace;background:#111;color:#eee;padding:20px">
+<div id="log">Caricamento modello…</div>
+<script type="module">
+import { pipeline, env, RawImage } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.1.2';
+env.allowLocalModels = false;
+env.useBrowserCache = true;
+const logEl = document.getElementById('log');
+const log = m => { logEl.textContent = m; console.log(m); };
+
+window.__depthState = 'loading';
+(async () => {
+  try {
+    // WebGPU se disponibile, altrimenti WASM
+    let estimator;
+    try {
+      estimator = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small', { device: 'webgpu' });
+    } catch(e) {
+      log('WebGPU non disponibile, uso WASM…');
+      estimator = await pipeline('depth-estimation', 'onnx-community/depth-anything-v2-small');
+    }
+    window.__estimator = estimator;
+    window.__depthState = 'ready';
+    log('Modello pronto.');
+  } catch(err) {
+    window.__depthState = 'error:' + (err && err.message || err);
+    log('Errore: ' + window.__depthState);
+  }
+})();
+
+// Genera la depth-map per un URL, ritorna dataURL PNG (grayscale), lato lungo max 1024
+window.genDepth = async function(url){
+  const out = await window.__estimator(url);
+  const rimg = out.depth; // RawImage 1 canale
+  // costruisci canvas RGBA dai dati grezzi
+  const W = rimg.width, H = rimg.height, ch = rimg.channels || 1;
+  const src = document.createElement('canvas');
+  src.width = W; src.height = H;
+  const sctx = src.getContext('2d');
+  const idata = sctx.createImageData(W, H);
+  for (let i = 0; i < W*H; i++){
+    const v = rimg.data[i*ch];
+    idata.data[i*4] = v; idata.data[i*4+1] = v; idata.data[i*4+2] = v; idata.data[i*4+3] = 255;
+  }
+  sctx.putImageData(idata, 0, 0);
+  // downscale lato lungo a max 1024
+  const maxSide = 1024;
+  let dw = W, dh = H;
+  if (Math.max(W, H) > maxSide){
+    const s = maxSide / Math.max(W, H);
+    dw = Math.round(W * s); dh = Math.round(H * s);
+  }
+  const dst = document.createElement('canvas');
+  dst.width = dw; dst.height = dh;
+  const dctx = dst.getContext('2d');
+  dctx.imageSmoothingEnabled = true;
+  dctx.drawImage(src, 0, 0, dw, dh);
+  return { dataURL: dst.toDataURL('image/png'), w: dw, h: dh, srcW: W, srcH: H };
+};
+</script>
+</body>
+</html>
