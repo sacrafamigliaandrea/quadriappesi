@@ -684,6 +684,84 @@ footer.site .firma::before {
   user-select: none;
   -webkit-touch-callout: none;
 }
+
+/* ============================================================
+   MODALITÀ MATERICA
+   ============================================================ */
+.materia-holder {
+  position: absolute;
+  inset: 0;
+  display: none;
+  place-items: center;
+  z-index: 3;
+}
+.materia-holder.active { display: grid; }
+.materia-holder canvas {
+  max-width: 100%;
+  max-height: calc(100vh - 120px);
+  display: block;
+  border-radius: 2px;
+  box-shadow: 0 30px 100px rgba(0,0,0,0.7);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.materia-toggle {
+  margin-top: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.05);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  transition: background .2s ease, border-color .2s ease, opacity .2s ease;
+  align-self: flex-start;
+}
+.materia-toggle:hover:not(:disabled) {
+  background: rgba(236,197,66,0.14);
+  border-color: var(--giallo);
+}
+.materia-toggle[aria-pressed="true"] {
+  background: rgba(23,56,134,0.35);
+  border-color: var(--blu);
+}
+.materia-toggle:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+.materia-toggle .mt-ico svg { width: 16px; height: 16px; color: var(--giallo); }
+
+.materia-badge {
+  position: absolute;
+  top: 24px; left: 32px;
+  z-index: 6;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--giallo);
+  font-weight: 600;
+  pointer-events: none;
+}
+.materia-hint {
+  position: absolute;
+  bottom: 28px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.75);
+  background: rgba(7,6,4,0.6);
+  padding: 8px 14px;
+  border-radius: 999px;
+  pointer-events: none;
+  transition: opacity .4s ease;
+}
 </style>
 </head>
 <body>
@@ -751,6 +829,9 @@ footer.site .firma::before {
   <div class="lb-grid">
     <div class="lb-stage">
       <img class="lb-img" id="lb-img" alt="">
+      <div class="materia-holder" id="materia-holder" aria-hidden="true"></div>
+      <div class="materia-badge" id="materia-badge" hidden>materia · luce interattiva</div>
+      <div class="materia-hint" id="materia-hint" hidden>muovi il mouse per illuminare</div>
       <button class="lb-btn lb-prev" id="lb-prev" aria-label="Opera precedente">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
       </button>
@@ -763,6 +844,16 @@ footer.site .firma::before {
       <div class="num" id="lb-info-num">N° 01 di 20</div>
       <h2 id="lb-title">—</h2>
       <div class="text" id="lb-text"></div>
+      <button class="materia-toggle" id="materia-toggle" type="button" aria-pressed="false">
+        <span class="mt-ico" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5 12 4l9 4.5-9 4.5-9-4.5Z"></path>
+            <path d="M3 12.5 12 17l9-4.5"></path>
+            <path d="M3 16.5 12 21l9-4.5"></path>
+          </svg>
+        </span>
+        <span class="mt-label" id="materia-toggle-label">Esplora la materia</span>
+      </button>
       <div class="foot">Galleria d'arte · Scuola Sacra Famiglia</div>
     </aside>
   </div>
@@ -960,6 +1051,13 @@ function openLightbox(idx) {
 }
 
 function closeLightbox() {
+  if (Materia.isActive()){
+    Materia.exit();
+    const t = window.__materiaToggle;
+    if (t){ t.el.setAttribute('aria-pressed','false'); t.label.textContent = 'Esplora la materia'; }
+    const b = document.getElementById('materia-badge');
+    if (b) b.hidden = true;
+  }
   lbEl.classList.remove('open');
   lbEl.setAttribute('aria-hidden', 'true');
   document.body.style.overflow = '';
@@ -983,6 +1081,7 @@ function updateLightbox() {
   if (infoEl) infoEl.scrollTop = 0;
 
   preloadAdjacent(lbIdx);
+  if (Materia.isActive()) Materia.swap(OPERE[lbIdx].file);
 }
 
 const nextLb = () => { lbIdx = (lbIdx + 1) % TOT; updateLightbox(); };
@@ -1040,6 +1139,328 @@ document.addEventListener('dragstart', e => {
    INIT
 ============================================================ */
 renderGallery();
+</script>
+
+<script>
+/* ============================================================
+   MODALITÀ MATERICA — controller UI (Task 1)
+============================================================ */
+(function(){
+  const toggle = document.getElementById('materia-toggle');
+  const label  = document.getElementById('materia-toggle-label');
+
+  function hasWebGL(){
+    try {
+      const c = document.createElement('canvas');
+      return !!(window.WebGLRenderingContext &&
+        (c.getContext('webgl') || c.getContext('experimental-webgl')));
+    } catch(e){ return false; }
+  }
+
+  if (!hasWebGL()){
+    toggle.disabled = true;
+    toggle.title = 'Il tuo browser non supporta la modalità materica';
+    return;
+  }
+
+  let busy = false;   // evita attivazioni concorrenti durante il caricamento
+  toggle.addEventListener('click', async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      const on = toggle.getAttribute('aria-pressed') === 'true';
+      if (on){
+        Materia.exit();
+        toggle.setAttribute('aria-pressed', 'false');
+        label.textContent = 'Esplora la materia';
+        document.getElementById('materia-badge').hidden = true;
+      } else {
+        label.textContent = 'Caricamento…';
+        try {
+          // Permesso giroscopio iOS 13+: va richiesto dentro il gesto utente.
+          if (typeof DeviceOrientationEvent !== 'undefined' &&
+              typeof DeviceOrientationEvent.requestPermission === 'function'){
+            try {
+              const p = await DeviceOrientationEvent.requestPermission();
+              if (p === 'granted') Materia.enableTilt();
+            } catch(_){ /* fallback: touch-drag */ }
+          } else if (typeof DeviceOrientationEvent !== 'undefined'){
+            Materia.enableTilt(); // Android / browser che non richiedono permesso
+          }
+          await Materia.enter(OPERE[lbIdx].file);
+          toggle.setAttribute('aria-pressed', 'true');
+          label.textContent = 'Torna al piatto';
+          const badge = document.getElementById('materia-badge');
+          badge.hidden = false;
+          if (!window.__materiaHintShown){
+            const hint = document.getElementById('materia-hint');
+            hint.hidden = false;
+            hint.style.opacity = '1';
+            setTimeout(() => {
+              hint.style.opacity = '0';
+              setTimeout(() => { hint.hidden = true; }, 400);
+            }, 2600);
+            window.__materiaHintShown = true;
+          }
+        } catch(err){
+          console.error(err);
+          Materia.exit();   // smonta l'eventuale renderer orfano del tentativo fallito
+          toggle.setAttribute('aria-pressed', 'false');
+          label.textContent = 'Esplora la materia';
+          document.getElementById('materia-badge').hidden = true;
+        }
+      }
+    } finally {
+      busy = false;
+    }
+  });
+
+  // Esposto per i task successivi.
+  window.__materiaToggle = { el: toggle, label };
+})();
+</script>
+
+<script>
+/* ============================================================
+   MODALITÀ MATERICA — modulo Materia (Task 2)
+============================================================ */
+const Materia = (function(){
+  const THREE_URL = 'https://unpkg.com/three@0.128.0/build/three.min.js';
+  let loadPromise = null;
+  let renderer, scene, camera, mesh, geo, mat, tex;
+  let holder, raf = null;
+  let active = false;
+  let aspect = 1;
+  let target = { lx: 0, ly: 0, px: 0, py: 0 };   // target da input
+  let cur    = { lx: 0, ly: 0, px: 0, py: 0 };   // valori smorzati
+  let lastInput = 0;
+  let swapToken = 0;
+  const IDLE_MS = 2500;
+  const reduceMotion = window.matchMedia &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function ready(){
+    if (window.THREE) return Promise.resolve();
+    if (loadPromise) return loadPromise;
+    loadPromise = new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = THREE_URL;
+      s.onload = () => res();
+      s.onerror = () => rej(new Error('Three.js non caricato'));
+      document.head.appendChild(s);
+    });
+    return loadPromise;
+  }
+
+  function loadTexture(file){
+    return new Promise((res, rej) => {
+      new THREE.TextureLoader().load(file, t => {
+        t.minFilter = THREE.LinearFilter;
+        t.magFilter = THREE.LinearFilter;
+        t.generateMipmaps = false;
+        t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+        if (renderer) t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+        res(t);
+      }, undefined, () => rej(new Error('texture: ' + file)));
+    });
+  }
+
+  function buildMaterial(texture){
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        map:        { value: texture },
+        uResolution:{ value: new THREE.Vector2(texture.image.width, texture.image.height) },
+        uLightDir:  { value: new THREE.Vector3(0.0, 0.0, 0.35) },
+        uBumpScale: { value: 14.0 },
+        uSpecular:  { value: 0.35 },
+        uShininess: { value: 24.0 },
+        uAmbient:   { value: 0.55 }
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        void main(){
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform sampler2D map;
+        uniform vec2 uResolution;
+        uniform vec3 uLightDir;
+        uniform float uBumpScale;
+        uniform float uSpecular;
+        uniform float uShininess;
+        uniform float uAmbient;
+        varying vec2 vUv;
+
+        float lum(vec2 uv){
+          vec3 c = texture2D(map, uv).rgb;
+          return dot(c, vec3(0.299, 0.587, 0.114));
+        }
+
+        void main(){
+          vec2 texel = 1.0 / uResolution;
+          vec3 albedo = texture2D(map, vUv).rgb;
+          float lx1 = lum(vUv - vec2(texel.x, 0.0));
+          float lx2 = lum(vUv + vec2(texel.x, 0.0));
+          float ly1 = lum(vUv - vec2(0.0, texel.y));
+          float ly2 = lum(vUv + vec2(0.0, texel.y));
+          vec3 n = normalize(vec3((lx1 - lx2) * uBumpScale,
+                                  (ly1 - ly2) * uBumpScale, 1.0));
+          vec3 L = normalize(uLightDir);
+          vec3 V = vec3(0.0, 0.0, 1.0);
+          vec3 H = normalize(L + V);
+          float diff = max(dot(n, L), 0.0);
+          float spec = pow(max(dot(n, H), 0.0), uShininess) * uSpecular;
+          vec3 color = albedo * (uAmbient + diff) + vec3(spec);
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `
+    });
+  }
+
+  function layout(){
+    if (!renderer) return;
+    const w = holder.clientWidth;
+    const h = holder.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const dist = camera.position.z;
+    const vH = 2 * Math.tan((camera.fov * Math.PI/180)/2) * dist;
+    const vW = vH * camera.aspect;
+    const margin = 0.9;
+    let sx, sy;
+    if (aspect > vW/vH) { sx = vW * margin; sy = sx / aspect; }
+    else                { sy = vH * margin; sx = sy * aspect; }
+    if (mesh) mesh.scale.set(sx, sy, 1);
+  }
+
+  function onPointer(e){
+    const r = renderer.domElement.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 2 - 1;   // [-1,1]
+    const y = -(((e.clientY - r.top) / r.height) * 2 - 1);
+    target.lx = x; target.ly = y;
+    target.px = x; target.py = y;
+    lastInput = performance.now();
+  }
+
+  function render(){
+    raf = requestAnimationFrame(render);
+    const now = performance.now();
+
+    // Idle: se nessun input recente, la luce orbita lentamente (se motion consentito).
+    if (!reduceMotion && now - lastInput > IDLE_MS){
+      const t = now * 0.0004;
+      target.lx = Math.cos(t) * 0.8;
+      target.ly = Math.sin(t) * 0.8;
+      target.px = target.lx * 0.4;
+      target.py = target.ly * 0.4;
+    }
+
+    // Smorzamento esponenziale.
+    const k = 0.08;
+    cur.lx += (target.lx - cur.lx) * k;
+    cur.ly += (target.ly - cur.ly) * k;
+    cur.px += (target.px - cur.px) * k;
+    cur.py += (target.py - cur.py) * k;
+
+    if (mat && mat.uniforms) mat.uniforms.uLightDir.value.set(cur.lx, cur.ly, 0.35);
+
+    // Parallasse camera (ammorbidita se reduced-motion).
+    const amp = reduceMotion ? 0.03 : 0.12;
+    camera.position.x = cur.px * amp;
+    camera.position.y = cur.py * amp;
+    camera.lookAt(0, 0, 0);
+
+    renderer.render(scene, camera);
+  }
+
+  async function enter(file){
+    await ready();
+    holder = document.getElementById('materia-holder');
+    if (!renderer){
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+      camera.position.z = 3;
+      geo = new THREE.PlaneGeometry(1, 1, 1, 1);
+      holder.appendChild(renderer.domElement);
+    }
+    tex = await loadTexture(file);
+    aspect = (tex.image.width || 1) / (tex.image.height || 1);
+    mat = buildMaterial(tex);
+    mesh = new THREE.Mesh(geo, mat);
+    scene.add(mesh);
+    holder.classList.add('active');
+    renderer.domElement.addEventListener('pointermove', onPointer);
+    renderer.domElement.addEventListener('touchmove', onTouch, { passive: true });
+    lastInput = performance.now();
+    active = true;
+    layout();
+    if (!raf) render();
+    window.addEventListener('resize', layout);
+  }
+
+  function exit(){
+    active = false;
+    swapToken++;   // invalida qualsiasi swap in volo
+    window.removeEventListener('resize', layout);
+    window.removeEventListener('deviceorientation', onOrient);
+    if (raf){ cancelAnimationFrame(raf); raf = null; }
+    if (mesh){ scene.remove(mesh); mesh = null; }
+    if (mat){ mat.dispose(); mat = null; }
+    if (tex){ tex.dispose(); tex = null; }
+    if (holder){ holder.classList.remove('active'); }
+    if (renderer){
+      renderer.domElement.removeEventListener('pointermove', onPointer);
+      renderer.domElement.removeEventListener('touchmove', onTouch);
+      if (geo) geo.dispose();
+      renderer.dispose();
+      renderer.forceContextLoss();
+      if (renderer.domElement && renderer.domElement.parentNode)
+        renderer.domElement.parentNode.removeChild(renderer.domElement);
+      renderer = null; scene = null; camera = null; geo = null;
+    }
+  }
+
+  function onOrient(e){
+    if (e.gamma == null || e.beta == null) return;
+    const x = Math.max(-1, Math.min(1, e.gamma / 45));   // sinistra/destra
+    const y = Math.max(-1, Math.min(1, (e.beta - 45) / 45)); // inclinazione
+    target.lx = x; target.ly = y; target.px = x; target.py = y;
+    lastInput = performance.now();
+  }
+  function onTouch(e){
+    if (!e.touches || !e.touches[0]) return;
+    onPointer(e.touches[0]);
+  }
+  function enableTilt(){
+    window.addEventListener('deviceorientation', onOrient);
+  }
+
+  async function swap(file){
+    if (!active || !renderer) return;
+    const token = ++swapToken;
+    const nt = await loadTexture(file);
+    // Se nel frattempo si è usciti o è partito un altro swap, abortisci.
+    if (token !== swapToken || !active || !renderer || !mat){ nt.dispose(); return; }
+    aspect = (nt.image.width || 1) / (nt.image.height || 1);
+    const old = tex;
+    tex = nt;
+    mat.uniforms.map.value = nt;
+    mat.uniforms.uResolution.value.set(nt.image.width, nt.image.height);
+    if (old) old.dispose();
+    layout();
+  }
+
+  return {
+    ready, enter, exit, swap, enableTilt,
+    isActive: () => active
+  };
+})();
 </script>
 </body>
 </html>
